@@ -8,10 +8,11 @@ public class ContinuousMazeGenerator : MonoBehaviour
     public int maxChunks = 3;
     private int generatedChunks = 0;
 
-
     private Vector2Int previousChunkExit;
     private Vector2Int nextChunkEntrance;
     private List<GameObject> activeChunks = new List<GameObject>();
+
+    private List<PathNode> pathway = new List<PathNode>();
 
     void Start()
     {
@@ -45,6 +46,8 @@ public class ContinuousMazeGenerator : MonoBehaviour
 
         MazeGenerator mazeGen = chunk.GetComponent<MazeGenerator>();
         mazeGen.GenerateMaze(null);
+        // Add Pathway into the system
+        pathway.AddRange(mazeGen.GetPathway());
         previousChunkExit = mazeGen.GetExitPoint();
     }
     
@@ -57,6 +60,12 @@ public class ContinuousMazeGenerator : MonoBehaviour
         MazeGenerator mazeGen = chunk.GetComponent<MazeGenerator>();
 
         mazeGen.GenerateMaze(FindNewChunkEntrance(previousChunkExit));
+        
+        // Check if the last direction is the same as the new object direction, if so then remove the last direction
+        List<PathNode> newPathway = mazeGen.GetPathway();
+        if (pathway[pathway.Count - 1].Direction == newPathway[0].Direction) pathway.RemoveAt(pathway.Count - 1);
+        
+        pathway.AddRange(mazeGen.GetPathway());
         previousChunkExit = mazeGen.GetExitPoint();
     }
 

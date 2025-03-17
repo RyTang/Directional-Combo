@@ -1,9 +1,8 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
-using Unity.Collections;
-using UnityEditor.XR;
-using UnityEngine.UIElements;
+using Unity.VisualScripting;
+using UnityEditor;
 
 public class MazeGenerator : MonoBehaviour
 {
@@ -18,10 +17,12 @@ public class MazeGenerator : MonoBehaviour
     private bool pathFound = false;
     private int gridWidth;
     private int gridHeight;
+    private Stack<Vector2Int> pathStack;
+    private List<PathNode> pathList = new List<PathNode>();
 
     public void GenerateMaze(Vector2Int? entryPoint)
     {
-
+        pathList = new List<PathNode>();
         // TODO: Make it smaller than 1 so there is always a corridor
         // Make it 1 cell smaller so that you can generate the corridors on all sides
         gridWidth = mazeWidth;
@@ -53,11 +54,15 @@ public class MazeGenerator : MonoBehaviour
         return exitPoint;
     }
 
+    public List<PathNode> GetPathway() {
+        return pathList;
+    }
+
     private void GeneratePath(Vector2Int startCell)
     {
         startPoint = startCell;
         Vector2Int current = startCell;
-        Stack<Vector2Int> pathStack = new Stack<Vector2Int>();
+        pathStack = new Stack<Vector2Int>();
         mazeGrid[current.x, current.y] = 1;
         pathStack.Push(current);
 
@@ -144,13 +149,17 @@ public class MazeGenerator : MonoBehaviour
                 Vector2Int corridorCell = current + chosenDir * i;
                 if (IsValidCell(corridorCell))
                 {
+                    // Add to Pathway
                     mazeGrid[corridorCell.x, corridorCell.y] = 1;
                     pathStack.Push(corridorCell);
                 }
             }
-
             current = nextCell;
         }
+    }
+
+    private Vector2 GridToWorldSpace(Vector2Int cell){
+        return (Vector2) transform.position + cell;
     }
 
     private bool IsExitSameSideAsEntrance(Vector2Int cell) {
@@ -221,6 +230,42 @@ public class MazeGenerator : MonoBehaviour
                     Instantiate(wallPrefab, position, Quaternion.identity, transform);
                 }
             }
+        }
+
+        GenerateInputPathway();
+    }
+
+    private void GenerateInputPathway(){
+        Vector2Int[] pathArray = pathStack.ToArray();
+        pathStack.Reverse();
+
+        HashSet<Vector2Int> seen = new HashSet<Vector2Int>();
+        List<Vector2Int> result = new List<Vector2Int>();
+
+        for (int i = pathArray.Length - 1; i >= 0; i--) {
+            if (seen.Add(pathArray[i])){
+                result.Add(pathArray[i]);
+            }
+        }
+
+        pathArray = result.ToArray();
+
+        Vector2Int lastPos = pathArray[0];
+        Vector2Int lastDir = Vector2Int.one;
+        
+        for (int i = 1; i < pathArray.Length; i++)
+        {
+            Vector2Int currentPos = pathArray[i];
+            if (currentPos == lastPos) continue;
+            Vector2Int currentDir = currentPos - lastPos;
+
+            if (currentPos != lastPos && currentDir != lastDir) // Direction changed
+            {
+                pathList.Add(new PathNode(lastPos, currentDir));
+            }
+
+            lastPos = currentPos;
+            lastDir = currentDir;
         }
     }
 
