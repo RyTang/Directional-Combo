@@ -23,7 +23,7 @@ public class MazeGenerator : MonoBehaviour
     public void GenerateMaze(Vector2Int? entryPoint)
     {
         pathList = new List<PathNode>();
-        // TODO: Make it smaller than 1 so there is always a corridor
+        // TODO: Make it smaller than 1 so there is always a corridor -> Consider if this is needed or wanted
         // Make it 1 cell smaller so that you can generate the corridors on all sides
         gridWidth = mazeWidth;
         gridHeight = mazeHeight;
@@ -47,6 +47,11 @@ public class MazeGenerator : MonoBehaviour
 
         // Transform back to original size
         DrawMaze();
+    }
+
+    public Vector2Int GetStartPoint()
+    {
+        return startPoint;
     }
 
     public Vector2Int GetExitPoint()
@@ -85,7 +90,6 @@ public class MazeGenerator : MonoBehaviour
                     return;
                 }
                 else if (!IsAtEdge(current)){
-                    // TODO: FIND THE CLOSEST EDGE IF NOT AT EDGE
                     Vector2Int closestEdge = current;
                     float minDistance = float.MaxValue;
                     foreach (Vector2Int dir in directions)
@@ -250,14 +254,15 @@ public class MazeGenerator : MonoBehaviour
 
         pathArray = result.ToArray();
 
-        Vector2Int lastPos = pathArray[0];
-        Vector2Int lastDir = Vector2Int.one;
+        // Skip First Cell as you will start there
+        Vector2 lastPos = LocalToWorldSpace(pathArray[0]);
+        Vector2 lastDir = Vector2.one;
         
         for (int i = 1; i < pathArray.Length; i++)
         {
-            Vector2Int currentPos = pathArray[i];
-            if (currentPos == lastPos) continue;
-            Vector2Int currentDir = currentPos - lastPos;
+            Vector2 currentPos = LocalToWorldSpace(pathArray[i]);
+            if (currentPos == lastPos) continue; // Skip Duplicates
+            Vector2 currentDir = currentPos - lastPos; // IT is 1 cell difference at a time -> TODO: Maybe need to change it to be normalized
 
             if (currentPos != lastPos && currentDir != lastDir) // Direction changed
             {
@@ -267,6 +272,53 @@ public class MazeGenerator : MonoBehaviour
             lastPos = currentPos;
             lastDir = currentDir;
         }
+    }
+
+    // private void GenerateInputPathway()
+    // {
+    //     Vector2Int[] pathArray = pathStack.ToArray();
+    //     pathStack.Reverse();
+
+    //     HashSet<Vector2Int> seen = new HashSet<Vector2Int>();
+    //     List<Vector2Int> result = new List<Vector2Int>();
+
+    //     for (int i = pathArray.Length - 1; i >= 0; i--)
+    //     {
+    //         if (seen.Add(pathArray[i]))
+    //         {
+    //             result.Add(pathArray[i]);
+    //         }
+    //     }
+
+    //     pathArray = result.ToArray();
+
+    //     // Skip First Cell as you will start there
+    //     Vector2 lastPos = LocalToWorldSpace(pathArray[0]);
+    //     Vector2 lastDir = Vector2.one;
+
+    //     for (int i = 1; i < pathArray.Length; i++)
+    //     {
+    //         Vector2 currentPos = LocalToWorldSpace(pathArray[i]);
+    //         if (currentPos == lastPos) continue; // Skip Duplicates
+    //         Vector2 currentDir = currentPos - lastPos; // IT is 1 cell difference at a time -> TODO: Maybe need to change it to be normalized
+
+    //         if (currentPos != lastPos && currentDir != lastDir) // Direction changed
+    //         {
+    //             pathList.Add(new PathNode(lastPos, currentDir));
+    //         }
+
+    //         lastPos = currentPos;
+    //         lastDir = currentDir;
+    //     }
+    // }
+
+    /// <summary>
+    /// Gets the World Space of the Local Space in comparison to the current object
+    /// </summary>
+    /// <param name="localPos">The Local Position in the object</param>
+    /// <returns>World Space of the object</returns>
+    public Vector2 LocalToWorldSpace(Vector2 localPos){
+        return transform.TransformPoint(localPos);
     }
 
     public void OnDrawGizmosSelected()

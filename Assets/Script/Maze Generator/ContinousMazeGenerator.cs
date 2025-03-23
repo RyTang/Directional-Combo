@@ -1,31 +1,33 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
+using System;
+using Unity.Profiling;
 
 public class ContinuousMazeGenerator : MonoBehaviour
 {
     public int chunkSize = 10; // TODO: Change this to read directly from the maze generator
     public GameObject chunkPrefab; // The prefab for maze chunks
     public int maxChunks = 3;
-    private int generatedChunks = 0;
+    public LayerMask mazeLayerMask;
 
+    public Vector2 mazeStartPosition;
     private Vector2Int previousChunkExit;
-    private Vector2Int nextChunkEntrance;
     private List<GameObject> activeChunks = new List<GameObject>();
-
     private List<PathNode> pathway = new List<PathNode>();
 
     void Start()
     {
-        generatedChunks = 1;
         GenerateInitialChunk();
+
+        mazeStartPosition = activeChunks[0].GetComponent<MazeGenerator>().GetStartPoint();
     }
 
     void Update()
     {
-        if (generatedChunks < maxChunks)
+        if (activeChunks.Count < maxChunks)
         {
             GenerateNextChunk();
-            generatedChunks++;
         }
 
         // Optional: Remove distant chunks to optimize performance
@@ -39,6 +41,19 @@ public class ContinuousMazeGenerator : MonoBehaviour
         // }
     }
 
+    /// <summary>
+    /// Checks if Input is correct, then consumes it. Returns position of the path to be in
+    /// </summary>
+    /// <param name="input">Direction Input that is Normalised</param>
+    /// <returns>World Position to move to</returns>
+    public Vector2? ConsumeIfCorrect(Vector2 input){
+        if (input == pathway[0].Direction) {
+            pathway.RemoveAt(0);
+            return pathway[0].Position;
+        }
+        return null;
+    }
+
     void GenerateInitialChunk()
     {
         GameObject chunk = Instantiate(chunkPrefab, Vector3.zero, Quaternion.identity);
@@ -49,22 +64,47 @@ public class ContinuousMazeGenerator : MonoBehaviour
         // Add Pathway into the system
         pathway.AddRange(mazeGen.GetPathway());
         previousChunkExit = mazeGen.GetExitPoint();
+        Debug.Log(string.Join(", ", pathway.Select(node => node.ToString())));
     }
     
     void GenerateNextChunk()
     {
         Vector3 nextPosition = GetNextChunkPosition();
+        
+        // If it collides then rollback one and regenerate the path
+        // PROBLEM STATEMENT, the location of the chunk is at the bottom left of the chunk hence need to calculate it properly
+        Collider2D collided = Physics2D.OverlapBox(nextPosition + new Vector3(chunkSize/2, chunkSize/2), Vector2.one * chunkSize/2, 0f, mazeLayerMask);
+        if (collided != null){
+            // Remove Previous CHanges Made
+            MazeGenerator chunkToRemove = activeChunks[activeChunks.Count - 1].GetComponent<MazeGenerator>();
+            
+            // Clear Off previousy made Path
+            int chunkToRemovePathCount = chunkToRemove.GetPathway().Count;
+            pathway.RemoveRange(pathway.Count - chunkToRemovePathCount, chunkToRemovePathCount);
+            Destroy(chunkToRemove.gameObject);
+            activeChunks.RemoveAt(activeChunks.Count - 1);
+
+            // Update Previous Chunk Exit
+            previousChunkExit = activeChunks[activeChunks.Count - 1].GetComponent<MazeGenerator>().GetExitPoint();
+            return;
+        }
+
+        // Beacuse of the Previous Chunk Exit pointing to something that doesn't exist anymore
+        
         GameObject chunk = Instantiate(chunkPrefab, nextPosition, Quaternion.identity);
         activeChunks.Add(chunk);
 
         MazeGenerator mazeGen = chunk.GetComponent<MazeGenerator>();
 
         mazeGen.GenerateMaze(FindNewChunkEntrance(previousChunkExit));
-        
+
         // Check if the last direction is the same as the new object direction, if so then remove the last direction
         List<PathNode> newPathway = mazeGen.GetPathway();
-        if (pathway[pathway.Count - 1].Direction == newPathway[0].Direction) pathway.RemoveAt(pathway.Count - 1);
-        
+        if (pathway[pathway.Count - 1].Direction == newPathway[0].Direction) {
+            newPathway.RemoveAt(0);
+        }
+
+        // Add Pathway
         pathway.AddRange(mazeGen.GetPathway());
         previousChunkExit = mazeGen.GetExitPoint();
     }
@@ -89,13 +129,6 @@ public class ContinuousMazeGenerator : MonoBehaviour
         return new Vector2Int(newX, newY);
     }
 
-    Vector2Int GetExitDirection(Vector2Int exitPoint){
-        if (exitPoint.x == 0) return Vector2Int.left;
-        else if (exitPoint.x == chunkSize - 1) return Vector2Int.right;
-        else if (exitPoint.y == 0) return Vector2Int.down;
-        else return Vector2Int.up;
-    }
-
     float PlayerDistanceToChunk(GameObject chunk)
     {
         Bounds chunkBounds = chunk.GetComponent<Renderer>().bounds;
@@ -118,27 +151,15 @@ public class ContinuousMazeGenerator : MonoBehaviour
 
         nextPosition = previousChunkExitDirection * chunkSize + lastChunkPosition;
 
-
-        // if (previousChunkExit.x == 0) // Left exit
-        // {
-        //     nextPosition = new Vector3(lastChunkPosition.x - chunkSize, lastChunkPosition.y);
-        // }
-        // else if (previousChunkExit.x == chunkSize - 1) // Right exit
-        // {
-        //     nextPosition = new Vector3(lastChunkPosition.x + chunkSize, lastChunkPosition.y);
-        // }
-        // else if (previousChunkExit.y == 0) // Bottom exit (default)
-        // {
-        //     nextPosition = new Vector3(lastChunkPosition.x, lastChunkPosition.y + chunkSize);
-        // }
-        // else if (previousChunkExit.y == chunkSize - 1) // Top exit
-        // {
-        //     nextPosition = new Vector3(lastChunkPosition.x, lastChunkPosition.y - chunkSize);
-        // }
-        // else {
-        //     Debug.LogError($"Encountered Error while getting Next Position for Chunk: {lastChunkPosition}");
-        //     nextPosition = Vector3.zero;
-        // }
         return nextPosition;
     }
+
+    Vector2Int GetExitDirection(Vector2Int exitPoint)
+    {
+        if (exitPoint.x == 0) return Vector2Int.left;
+        else if (exitPoint.x == chunkSize - 1) return Vector2Int.right;
+        else if (exitPoint.y == 0) return Vector2Int.down;
+        else return Vector2Int.up;
+    }
+
 }
