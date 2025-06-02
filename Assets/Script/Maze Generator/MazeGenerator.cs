@@ -20,10 +20,10 @@ public class MazeGenerator : MonoBehaviour
     private Stack<Vector2Int> pathStack;
     private List<PathNode> pathList = new List<PathNode>();
 
+
     public void GenerateMaze(Vector2Int? entryPoint)
     {
         pathList = new List<PathNode>();
-        // TODO: Make it smaller than 1 so there is always a corridor -> Consider if this is needed or wanted
         // Make it 1 cell smaller so that you can generate the corridors on all sides
         gridWidth = mazeWidth;
         gridHeight = mazeHeight;
@@ -223,7 +223,6 @@ public class MazeGenerator : MonoBehaviour
 
     private void DrawMaze()
     {
-        // TODO: Make the maze 1 size bigger so that the corridor is always closed
         for (int x = 0; x < gridWidth; x++)
         {
             for (int y = 0; y < gridHeight; y++)

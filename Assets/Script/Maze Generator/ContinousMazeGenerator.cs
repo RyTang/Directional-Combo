@@ -8,19 +8,34 @@ public class ContinuousMazeGenerator : MonoBehaviour
 {
     public int chunkSize = 10; // TODO: Change this to read directly from the maze generator
     public GameObject chunkPrefab; // The prefab for maze chunks
+    public GameObject player;
     public int maxChunks = 3;
     public LayerMask mazeLayerMask;
+    [SerializeField] private GameEvent mazeDoneGenerating;
+
+    [SerializeField] private float chunkRemoverBuffer = 2;
 
     public Vector2 mazeStartPosition;
     private Vector2Int previousChunkExit;
     private List<GameObject> activeChunks = new List<GameObject>();
     private List<PathNode> pathway = new List<PathNode>();
+    private List<int> actionsRequiredList = new List<int>();
+    private int actionCounter = 0;
+
 
     void Start()
     {
+        actionCounter = 0;
         GenerateInitialChunk();
 
         mazeStartPosition = activeChunks[0].GetComponent<MazeGenerator>().GetStartPoint();
+
+        mazeDoneGenerating.TriggerEvent();
+
+        player ??= GameObject.FindGameObjectWithTag("Player");
+
+        Debug.Assert(player is not null, $"Player Object is null in {this}");
+
     }
 
     void Update()
@@ -31,14 +46,17 @@ public class ContinuousMazeGenerator : MonoBehaviour
         }
 
         // Optional: Remove distant chunks to optimize performance
-        // for (int i = activeChunks.Count - 1; i >= 0; i--)
-        // {
-        //     if (PlayerDistanceToChunk(activeChunks[i]) > 2 * chunkSize)
-        //     {
-        //         Destroy(activeChunks[i]);
-        //         activeChunks.RemoveAt(i);
-        //     }
-        // }
+        // FIXME: Need to only destroy chunks that we have passed
+        if (actionCounter >= actionsRequiredList[0] * chunkRemoverBuffer)
+        {
+            Debug.Log("Destroying Chunks");
+            // Remove the oldest chunk
+            Destroy(activeChunks[0]);
+            activeChunks.RemoveAt(0);
+
+            actionCounter = (int)MathF.Max(0, actionCounter - actionsRequiredList[0] * chunkRemoverBuffer);
+            actionsRequiredList.RemoveAt(0);
+        }
     }
 
     /// <summary>
@@ -47,8 +65,10 @@ public class ContinuousMazeGenerator : MonoBehaviour
     /// <param name="input">Direction Input that is Normalised</param>
     /// <returns>World Position to move to</returns>
     public Vector2? ConsumeIfCorrect(Vector2 input){
-        if (input == pathway[0].Direction) {
+        if (input == pathway[0].Direction)
+        {
             pathway.RemoveAt(0);
+            actionCounter += 1;
             return pathway[0].Position;
         }
         return null;
@@ -104,6 +124,10 @@ public class ContinuousMazeGenerator : MonoBehaviour
             newPathway.RemoveAt(0);
         }
 
+        int actionsRequired = newPathway.Count;
+
+        actionsRequiredList.Add(actionsRequired);
+
         // Add Pathway
         pathway.AddRange(mazeGen.GetPathway());
         previousChunkExit = mazeGen.GetExitPoint();
@@ -127,13 +151,6 @@ public class ContinuousMazeGenerator : MonoBehaviour
         }
 
         return new Vector2Int(newX, newY);
-    }
-
-    float PlayerDistanceToChunk(GameObject chunk)
-    {
-        Bounds chunkBounds = chunk.GetComponent<Renderer>().bounds;
-        GameObject player = GameObject.FindGameObjectWithTag("Player");
-        return Vector3.Distance(player.transform.position, chunkBounds.center);
     }
 
     Vector3 GetNextChunkPosition()
