@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Unity.VisualScripting;
 using UnityEditor;
+using System.Collections;
 
 public class MazeGenerator : MonoBehaviour
 {
@@ -17,8 +18,9 @@ public class MazeGenerator : MonoBehaviour
     private bool pathFound = false;
     private int gridWidth;
     private int gridHeight;
-    private Stack<Vector2Int> pathStack;
-    private List<PathNode> pathList = new List<PathNode>();
+    [SerializeField] private Stack<Vector2Int> pathStack;
+
+    [SerializeField] private List<PathNode> pathList = new List<PathNode>();
 
 
     public void GenerateMaze(Vector2Int? entryPoint)
@@ -63,42 +65,66 @@ public class MazeGenerator : MonoBehaviour
         return pathList;
     }
 
+    /// <summary>
+    /// Generates a random path through the maze using a depth-first search algorithm with backtracking.
+    /// The algorithm creates corridors of variable length and ensures the path reaches an edge that's
+    /// not on the same side as the entrance to create a valid exit point.
+    /// </summary>
+    /// <param name="startCell">The starting cell position for path generation</param>
     private void GeneratePath(Vector2Int startCell)
     {
+        // Initialize path generation starting point and data structures
         startPoint = startCell;
         Vector2Int current = startCell;
         pathStack = new Stack<Vector2Int>();
-        mazeGrid[current.x, current.y] = 1;
+        mazeGrid[current.x, current.y] = 1; // Mark starting cell as path (1 = path, 0 = wall)
         pathStack.Push(current);
 
+        // Define the four cardinal directions for corridor generation
         Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
 
+        // Main path generation loop using depth-first search with backtracking
         while (pathStack.Count > 0)
         {
             List<Vector2Int> validDirections = new List<Vector2Int>();
-            directions.Shuffle();
+            directions.Shuffle(); // Randomize direction order for varied maze patterns
 
+            // Generate a random corridor length within specified bounds
             int corridorLength = Random.Range(minCorridorLength, maxCorridorLength);
 
+            // Find all directions where we can create a valid corridor of the desired length
             validDirections.AddRange(directions.Where(dir => IsValidCorridor(current, dir, corridorLength)));
 
+            // CASE 1: No valid directions available - handle dead ends and exit conditions
             if (validDirections.Count == 0)
             {
-                if (IsAtEdge(current) && !IsExitSameSideAsEntrance(current)){
+                // Check if current position can serve as a valid exit point
+                // Must be at edge and not on the same side as entrance
+                if (IsAtEdge(current) && !IsExitSameSideAsEntrance(current))
+                {
                     exitPoint = current;
+                    pathStack.Push(current); // Add the exit point to the path stack
                     pathFound = true;
                     return;
                 }
-                else if (!IsAtEdge(current)){
+                
+                // If not at edge, try to find the closest valid edge and create a direct path to it
+                else if (!IsAtEdge(current))
+                {
                     Vector2Int closestEdge = current;
                     float minDistance = float.MaxValue;
+                    
+                    // Search in all directions to find the closest valid edge
                     foreach (Vector2Int dir in directions)
                     {
                         Vector2Int edgeCell = current;
+                        // Move in direction until hitting an edge
                         while (IsValidCell(edgeCell) && !IsAtEdge(edgeCell))
                         {
                             edgeCell += dir;
                         }
+                        
+                        // Check if this edge is valid (exists and not same side as entrance)
                         if (IsValidCell(edgeCell) && !IsExitSameSideAsEntrance(edgeCell))
                         {
                             float distance = Vector2Int.Distance(current, edgeCell);
@@ -109,9 +135,14 @@ public class MazeGenerator : MonoBehaviour
                             }
                         }
                     }
-                    if (closestEdge != current && IsValidCorridor(current, closestEdge)){
+
+                    // If a valid edge was found and we can create a corridor to it, do so
+                    if (closestEdge != current && IsValidCorridor(current, closestEdge))
+                    {
                         Vector2Int direction = GetDirection(current, closestEdge);
                         int length = (closestEdge - current).x != 0 ? Mathf.Abs((closestEdge - current).x) : Mathf.Abs((closestEdge - current).y);
+                        
+                        // Create corridor from current position to the edge
                         for (int i = 0; i <= length; i++)
                         {
                             Vector2Int corridorCell = current + direction * i;
@@ -122,48 +153,49 @@ public class MazeGenerator : MonoBehaviour
                             }
                         }
                         exitPoint = closestEdge;
+                        pathStack.Push(closestEdge); // Add the exit point to the path stack
                         pathFound = true;
                         return;
                     }
-
                 }
 
+                // BACKTRACKING: If no valid moves or exit found, backtrack by removing current path
+                // This implements the backtracking aspect of the depth-first search
                 while (pathStack.Count > 0)
                 {
-                    mazeGrid[current.x, current.y] = 0;
+                    mazeGrid[current.x, current.y] = 0; // Mark cell as wall again
                     pathStack.Pop();
                     if (pathStack.Count > 0)
                     {
-                        current = pathStack.Peek();
+                        current = pathStack.Peek(); // Move back to previous cell
                     }
                 }
                 continue;
             }
 
+            // CASE 2: Valid directions available - extend the path
+            // Choose a random valid direction and create a corridor
             Vector2Int chosenDir = validDirections[Random.Range(0, validDirections.Count)];
             Vector2Int nextCell = current + chosenDir * corridorLength;
 
+            // Safety check - ensure the destination cell is valid
             if (!IsValidCell(nextCell))
             {
                 continue;
             }
 
+            // Create the corridor by marking all cells in the path
             for (int i = 0; i <= corridorLength; i++)
             {
                 Vector2Int corridorCell = current + chosenDir * i;
                 if (IsValidCell(corridorCell))
                 {
-                    // Add to Pathway
-                    mazeGrid[corridorCell.x, corridorCell.y] = 1;
-                    pathStack.Push(corridorCell);
+                    mazeGrid[corridorCell.x, corridorCell.y] = 1; // Mark as path
+                    pathStack.Push(corridorCell); // Add to path stack for potential backtracking
                 }
             }
-            current = nextCell;
+            current = nextCell; // Move to the end of the newly created corridor
         }
-    }
-
-    private Vector2 GridToWorldSpace(Vector2Int cell){
-        return (Vector2) transform.position + cell;
     }
 
     private bool IsExitSameSideAsEntrance(Vector2Int cell) {
@@ -216,6 +248,30 @@ public class MazeGenerator : MonoBehaviour
         return cell.x == 0 || cell.x == gridWidth - 1 || cell.y == 0 || cell.y == gridHeight - 1;
     }
 
+    /// <summary>
+    /// Returns the direction (Vector2Int) from the given cell to the closest edge of the maze
+    /// </summary>
+    /// <param name="cell">Cell To check</param>
+    /// <returns>Direction</returns>
+    private Vector2Int GetExitDirection(Vector2Int cell)
+    {
+        int leftDist = cell.x;
+        int rightDist = gridWidth - 1 - cell.x;
+        int downDist = cell.y;
+        int upDist = gridHeight - 1 - cell.y;
+
+        int minDist = Mathf.Min(leftDist, rightDist, downDist, upDist);
+
+        if (minDist == leftDist)
+            return Vector2Int.left;
+        if (minDist == rightDist)
+            return Vector2Int.right;
+        if (minDist == downDist)
+            return Vector2Int.down;
+        // else upDist is smallest
+        return Vector2Int.up;
+    }
+
     private bool IsValidCell(Vector2Int cell)
     {
         return cell.x >= 0 && cell.x < gridWidth && cell.y >= 0 && cell.y < gridHeight;
@@ -238,15 +294,18 @@ public class MazeGenerator : MonoBehaviour
         GenerateInputPathway();
     }
 
-    private void GenerateInputPathway(){
+    private void GenerateInputPathway()
+    {
         Vector2Int[] pathArray = pathStack.ToArray();
         pathStack.Reverse();
 
         HashSet<Vector2Int> seen = new HashSet<Vector2Int>();
         List<Vector2Int> result = new List<Vector2Int>();
 
-        for (int i = pathArray.Length - 1; i >= 0; i--) {
-            if (seen.Add(pathArray[i])){
+        for (int i = pathArray.Length - 1; i >= 0; i--)
+        {
+            if (seen.Add(pathArray[i]))
+            {
                 result.Add(pathArray[i]);
             }
         }
@@ -254,62 +313,35 @@ public class MazeGenerator : MonoBehaviour
         pathArray = result.ToArray();
 
         // Skip First Cell as you will start there
-        Vector2 lastPos = LocalToWorldSpace(pathArray[0]);
-        Vector2 lastDir = Vector2.one;
-        
+        Vector2 curPos = LocalToWorldSpace(pathArray[0]);
+        Vector2 curDir = Vector2.one;
+        Vector2 nextDir = Vector2.one, nextPos;
+
         for (int i = 1; i < pathArray.Length; i++)
         {
-            Vector2 currentPos = LocalToWorldSpace(pathArray[i]);
-            if (currentPos == lastPos) continue; // Skip Duplicates
-            Vector2 currentDir = currentPos - lastPos; // IT is 1 cell difference at a time -> TODO: Maybe need to change it to be normalized
+            nextPos = LocalToWorldSpace(pathArray[i]);
+            if (nextPos == curPos) continue; // Skip Duplicates
+            nextDir = nextPos - curPos; // IT is 1 cell difference at a time -> TODO: Maybe need to change it to be normalized
 
-            if (currentPos != lastPos && currentDir != lastDir) // Direction changed
+            if (nextPos != curPos && nextDir != curDir) // Direction changed
             {
-                pathList.Add(new PathNode(lastPos, currentDir));
+                pathList.Add(new PathNode(curPos, nextDir));
             }
 
-            lastPos = currentPos;
-            lastDir = currentDir;
+            curPos = nextPos;
+            curDir = nextDir;
+        }
+
+        // Get the Last One
+        nextDir = GetExitDirection(exitPoint);
+
+        // If current direction then update last final point
+        if (curDir != nextDir)
+        {
+            pathList.Add(new PathNode(curPos, nextDir));
         }
     }
 
-    // private void GenerateInputPathway()
-    // {
-    //     Vector2Int[] pathArray = pathStack.ToArray();
-    //     pathStack.Reverse();
-
-    //     HashSet<Vector2Int> seen = new HashSet<Vector2Int>();
-    //     List<Vector2Int> result = new List<Vector2Int>();
-
-    //     for (int i = pathArray.Length - 1; i >= 0; i--)
-    //     {
-    //         if (seen.Add(pathArray[i]))
-    //         {
-    //             result.Add(pathArray[i]);
-    //         }
-    //     }
-
-    //     pathArray = result.ToArray();
-
-    //     // Skip First Cell as you will start there
-    //     Vector2 lastPos = LocalToWorldSpace(pathArray[0]);
-    //     Vector2 lastDir = Vector2.one;
-
-    //     for (int i = 1; i < pathArray.Length; i++)
-    //     {
-    //         Vector2 currentPos = LocalToWorldSpace(pathArray[i]);
-    //         if (currentPos == lastPos) continue; // Skip Duplicates
-    //         Vector2 currentDir = currentPos - lastPos; // IT is 1 cell difference at a time -> TODO: Maybe need to change it to be normalized
-
-    //         if (currentPos != lastPos && currentDir != lastDir) // Direction changed
-    //         {
-    //             pathList.Add(new PathNode(lastPos, currentDir));
-    //         }
-
-    //         lastPos = currentPos;
-    //         lastDir = currentDir;
-    //     }
-    // }
 
     /// <summary>
     /// Gets the World Space of the Local Space in comparison to the current object

@@ -119,9 +119,18 @@ public class ContinuousMazeGenerator : MonoBehaviour
         mazeGen.GenerateMaze(FindNewChunkEntrance(previousChunkExit));
 
         // Check if the last direction is the same as the new object direction, if so then remove the last direction
+        // FIXME: BUG where when connecting between 2 chunks will have issues, where the next Position is diagonal
         List<PathNode> newPathway = mazeGen.GetPathway();
-        if (pathway[pathway.Count - 1].Direction == newPathway[0].Direction) {
-            newPathway.RemoveAt(0);
+        if (Vector2.Angle(pathway[pathway.Count - 1].Direction, newPathway[0].Direction) < 0.01f)
+        {
+            Debug.Log($"Removed position {newPathway[0]}, comparing {pathway[pathway.Count - 1]} and {newPathway[0]}");
+            Debug.Log($"Next Position: {newPathway[1]}");
+            newPathway.RemoveAt(0); // FIXME: Something is wrong here
+        }
+        else
+        {
+            // pathway.RemoveAt(pathway.Count - 1); // FIXME: Something is wrong here
+            // pathway[pathway.Count - 1] = new PathNode(newPathway[0].Position, newPathway[0].Direction);
         }
 
         int actionsRequired = newPathway.Count;
