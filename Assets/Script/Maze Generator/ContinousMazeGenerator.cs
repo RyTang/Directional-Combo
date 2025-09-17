@@ -2,7 +2,6 @@ using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 using System;
-using Unity.Profiling;
 
 public class ContinuousMazeGenerator : MonoBehaviour
 {
@@ -46,7 +45,6 @@ public class ContinuousMazeGenerator : MonoBehaviour
         }
 
         // Optional: Remove distant chunks to optimize performance
-        // FIXME: Need to only destroy chunks that we have passed
         if (actionCounter >= actionsRequiredList[0] * chunkRemoverBuffer)
         {
             Debug.Log("Destroying Chunks");
@@ -119,18 +117,12 @@ public class ContinuousMazeGenerator : MonoBehaviour
         mazeGen.GenerateMaze(FindNewChunkEntrance(previousChunkExit));
 
         // Check if the last direction is the same as the new object direction, if so then remove the last direction
-        // FIXME: BUG where when connecting between 2 chunks will have issues, where the next Position is diagonal
         List<PathNode> newPathway = mazeGen.GetPathway();
         if (Vector2.Angle(pathway[pathway.Count - 1].Direction, newPathway[0].Direction) < 0.01f)
         {
             Debug.Log($"Removed position {newPathway[0]}, comparing {pathway[pathway.Count - 1]} and {newPathway[0]}");
             Debug.Log($"Next Position: {newPathway[1]}");
-            newPathway.RemoveAt(0); // FIXME: Something is wrong here
-        }
-        else
-        {
-            // pathway.RemoveAt(pathway.Count - 1); // FIXME: Something is wrong here
-            // pathway[pathway.Count - 1] = new PathNode(newPathway[0].Position, newPathway[0].Direction);
+            newPathway.RemoveAt(0); 
         }
 
         int actionsRequired = newPathway.Count;
